@@ -1,0 +1,71 @@
+{
+  "description": "Run DuckLake tests using Microsoft SQL Server as a catalog DBMS (mssql extension). Requires database ducklake_catalog to exist (CI creates it before tests).",
+  "autoloading": "none",
+  "statically_loaded_extensions": [
+    "core_functions",
+    "parquet",
+    "ducklake",
+    "httpfs",
+    "mssql",
+    "icu"
+  ],
+  "test_env": [
+    {
+      "env_name": "DUCKLAKE_CONNECTION",
+      "env_value": "mssql:Server=127.0.0.1,1433;Database=ducklake_catalog;User Id=sa;Password=DuckLake_Test123!;Encrypt=true;TrustServerCertificate=true"
+    }
+  ],
+  "skip_tests": [
+    {
+      "reason": "Tests only for DuckDB as a catalog",
+      "paths": [
+        "test/sql/general/missing_parquet.test",
+        "test/sql/general/paths.test",
+        "test/sql/general/default_path.test",
+        "test/sql/autoloading/autoload_data_path.test",
+        "test/sql/general/metadata_parameters.test",
+        "test/sql/issues/corrupted_catalog_fault_isolation.test",
+        "test/sql/metadata/ducklake_settings.test",
+        "test/sql/remove_orphans/metadata_in_data_path.test"
+      ]
+    },
+    {
+      "reason": "Modifies connection string",
+      "paths": [
+        "test/sql/catalog/quoted_identifiers.test",
+        "test/sql/stats/count_star_optimization_file_operations.test"
+      ]
+    },
+    {
+      "reason": "Migration",
+      "paths": [
+        "test/sql/migration/v01_partitioned.test",
+        "test/sql/migration/v01.test"
+      ]
+    },
+    {
+      "reason": "Test only for SQLite as catalog",
+      "paths": [
+        "test/sql/metadata/ducklake_settings_sqlite.test"
+      ]
+    },
+    {
+      "reason": "Test only for Postgres as catalog",
+      "paths": [
+        "test/sql/metadata/ducklake_settings_postgres.test"
+      ]
+    },
+    {
+      "reason": "MSSQL locking / transaction behavior may differ",
+      "paths": [
+        "test/sql/transaction/transaction_conflict_inlining.test"
+      ]
+    },
+    {
+      "reason": "Concurrent deletion inlining",
+      "paths": [
+        "test/sql/deletion_inlining/test_deletion_inlining_concurrent.test"
+      ]
+    }
+  ]
+}

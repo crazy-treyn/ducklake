@@ -1,0 +1,28 @@
+# name: test/sql/mssql/ducklake_mssql_meta_passthrough.test
+# description: META_TYPE passthrough for MSSQL inner attach (no live Azure credentials)
+# group: [mssql]
+
+require ducklake
+
+require parquet
+
+require mssql
+
+test-env DUCKLAKE_CONNECTION __TEST_DIR__/{UUID}.db
+
+test-env DATA_PATH __TEST_DIR__
+
+# Explicit META_TYPE must match the connection string prefix.
+statement ok
+ATTACH 'ducklake:${DUCKLAKE_CONNECTION}' AS dl (DATA_PATH '${DATA_PATH}/meta_pass_files', META_TYPE 'mssql')
+
+statement ok
+CREATE TABLE dl.t(i INTEGER);
+
+statement ok
+INSERT INTO dl.t VALUES (42);
+
+query I
+SELECT i FROM dl.t
+----
+42

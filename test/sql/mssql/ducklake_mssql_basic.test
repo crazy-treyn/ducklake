@@ -1,0 +1,44 @@
+# name: test/sql/mssql/ducklake_mssql_basic.test
+# description: End-to-end DuckLake with MSSQL metadata catalog
+# group: [mssql]
+
+require ducklake
+
+require parquet
+
+require mssql
+
+test-env DUCKLAKE_CONNECTION __TEST_DIR__/{UUID}.db
+
+test-env DATA_PATH __TEST_DIR__
+
+statement ok
+ATTACH 'ducklake:${DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '${DATA_PATH}/mssql_basic_files', METADATA_CATALOG 'ducklake_meta', META_TYPE 'mssql')
+
+statement ok
+CREATE TABLE ducklake.t(i INTEGER, j INTEGER);
+
+query II
+SELECT * FROM ducklake.t
+----
+
+statement ok
+INSERT INTO ducklake.t VALUES (1, 2), (NULL, 3);
+
+query II
+SELECT * FROM ducklake.t
+----
+1	2
+NULL	3
+
+statement ok
+DETACH ducklake
+
+statement ok
+ATTACH 'ducklake:${DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '${DATA_PATH}/mssql_basic_files', METADATA_CATALOG 'ducklake_meta', META_TYPE 'mssql')
+
+query II
+SELECT * FROM ducklake.t
+----
+1	2
+NULL	3

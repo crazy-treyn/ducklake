@@ -19,3 +19,7 @@ endif()
 if($ENV{ENABLE_POSTGRES_SCANNER})
     include("${EXTENSION_CONFIG_BASE_DIR}/postgres_scanner.cmake")
 endif()
+
+if($ENV{ENABLE_MSSQL_SCANNER})
+    include("${EXTENSION_CONFIG_BASE_DIR}/mssql_scanner.cmake")
+endif()

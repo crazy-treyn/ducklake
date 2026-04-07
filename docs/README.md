@@ -30,6 +30,65 @@ The latest development version can be installed from `core_nightly`:
 FORCE INSTALL ducklake FROM core_nightly;
 ```
 
+## SQL Server, Azure SQL, and Microsoft Fabric (metadata catalog)
+
+DuckLake can store its metadata in Microsoft SQL Server (including Azure SQL Database and Fabric warehouse endpoints) using the community [`mssql` extension](https://duckdb.org/community_extensions/extensions/mssql.html). Install and load both extensions before attaching:
+
+```sql
+INSTALL ducklake;
+INSTALL mssql FROM community;
+LOAD mssql;
+```
+
+For Azure Active Directory (Entra ID) authentication, also install the [`azure` extension](https://duckdb.org/docs/extensions/azure) and create an Azure secret; see the [mssql extension Azure guide](https://github.com/hugr-lab/mssql-extension/blob/main/AZURE.md).
+
+### Attach with SQL authentication
+
+```sql
+ATTACH 'ducklake:mssql:Server=myserver.database.windows.net,1433;Database=my_catalog;User Id=myuser;Password=***;Encrypt=true' AS my_lake
+  (DATA_PATH 'abfss://container@account.dfs.core.windows.net/data/', META_TYPE 'mssql');
+USE my_lake;
+```
+
+`META_TYPE 'mssql'` is optional when the connection string already starts with the `mssql:` prefix; it is required when you pass a bare connection string or use a DuckLake secret (see below).
+
+### Attach with Azure AD (service principal)
+
+```sql
+INSTALL azure;
+LOAD azure;
+
+CREATE SECRET azure_sp (
+    TYPE azure,
+    PROVIDER service_principal,
+    TENANT_ID 'your-tenant-id',
+    CLIENT_ID 'your-client-id',
+    CLIENT_SECRET 'your-client-secret'
+);
+
+ATTACH 'ducklake:mssql:Server=myserver.database.windows.net,1433;Database=my_catalog;Encrypt=true' AS my_lake
+  (DATA_PATH 's3://my-bucket/lake-data/', META_TYPE 'mssql', META_AZURE_SECRET 'azure_sp');
+```
+
+`META_AZURE_SECRET` and other `META_*` options are forwarded to the inner `ATTACH ... TYPE mssql` that DuckLake uses for the catalog database.
+
+### DuckLake `TYPE DUCKLAKE` secrets
+
+You can store connection details in a DuckLake secret and attach by name:
+
+```sql
+CREATE SECRET my_lake (
+    TYPE DUCKLAKE,
+    METADATA_PATH 'mssql:Server=myserver.database.windows.net,1433;Database=my_catalog;Encrypt=true',
+    DATA_PATH 'az://my-data-path/',
+    METADATA_PARAMETERS MAP {
+        'AZURE_SECRET': 'azure_sp'
+    }
+);
+
+ATTACH 'ducklake:my_lake' AS my_lake;
+```
+
 ## Usage
 
 DuckLake databases can be attached using the  [`ATTACH`](https://duckdb.org/docs/stable/sql/statements/attach.html) syntax, after which tables can be created, modified and queried using standard SQL.
