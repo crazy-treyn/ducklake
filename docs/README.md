@@ -32,32 +32,44 @@ FORCE INSTALL ducklake FROM core_nightly;
 
 ## SQL Server, Azure SQL, and Microsoft Fabric (metadata catalog)
 
-DuckLake can store its metadata in Microsoft SQL Server (including Azure SQL Database and Fabric warehouse endpoints) using the community [`mssql` extension](https://duckdb.org/community_extensions/extensions/mssql.html). Install and load both extensions before attaching:
+DuckLake can store its metadata in Microsoft SQL Server (including Azure SQL Database and Microsoft Fabric warehouse endpoints) using the community [`mssql` extension](https://duckdb.org/community_extensions/extensions/mssql.html). For **Azure SQL and Fabric**, authentication is typically **Microsoft Entra ID (Azure AD)** via the [`azure` extension](https://duckdb.org/docs/extensions/azure)—not SQL Server `User Id` / `Password`. The mssql extension documents all auth modes in its [AZURE.md](https://github.com/hugr-lab/mssql-extension/blob/main/AZURE.md) guide.
+
+Install what you need:
 
 ```sql
 INSTALL ducklake;
 INSTALL mssql FROM community;
+INSTALL azure;
 LOAD mssql;
+LOAD azure;
 ```
 
-For Azure Active Directory (Entra ID) authentication, also install the [`azure` extension](https://duckdb.org/docs/extensions/azure) and create an Azure secret; see the [mssql extension Azure guide](https://github.com/hugr-lab/mssql-extension/blob/main/AZURE.md).
+Sign in with the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login`) and select a subscription (`az account set --subscription ...`) before attaching. DuckLake forwards `META_AZURE_SECRET` and other `META_*` options to the inner `ATTACH ... TYPE mssql` used for the metadata catalog.
 
-### Attach with SQL authentication
+### Attach with Azure CLI (recommended for interactive use)
+
+This uses your `az login` session through a **credential_chain** secret (`CHAIN 'cli'`):
 
 ```sql
-ATTACH 'ducklake:mssql:Server=myserver.database.windows.net,1433;Database=my_catalog;User Id=myuser;Password=***;Encrypt=true' AS my_lake
-  (DATA_PATH 'abfss://container@account.dfs.core.windows.net/data/', META_TYPE 'mssql');
+CREATE SECRET azure_cli (
+    TYPE azure,
+    PROVIDER credential_chain,
+    CHAIN 'cli'
+);
+
+ATTACH 'ducklake:mssql:Server=myserver.database.windows.net,1433;Database=my_catalog;Encrypt=true' AS my_lake
+  (DATA_PATH 'abfss://container@account.dfs.core.windows.net/data/', META_TYPE 'mssql', META_AZURE_SECRET 'azure_cli');
+
 USE my_lake;
 ```
 
-`META_TYPE 'mssql'` is optional when the connection string already starts with the `mssql:` prefix; it is required when you pass a bare connection string or use a DuckLake secret (see below).
+For Fabric Data Warehouse, use your warehouse host (for example `xyz.datawarehouse.fabric.microsoft.com`) and database name in the connection string the same way.
 
-### Attach with Azure AD (service principal)
+`META_TYPE 'mssql'` is optional when `METADATA_PATH` / the attach path already uses the `mssql:` prefix; keep it when using DuckLake secrets or a bare connection string.
+
+### Attach with a service principal (automation / CI to Azure)
 
 ```sql
-INSTALL azure;
-LOAD azure;
-
 CREATE SECRET azure_sp (
     TYPE azure,
     PROVIDER service_principal,
@@ -67,14 +79,14 @@ CREATE SECRET azure_sp (
 );
 
 ATTACH 'ducklake:mssql:Server=myserver.database.windows.net,1433;Database=my_catalog;Encrypt=true' AS my_lake
-  (DATA_PATH 's3://my-bucket/lake-data/', META_TYPE 'mssql', META_AZURE_SECRET 'azure_sp');
+  (DATA_PATH 'abfss://container@account.dfs.core.windows.net/data/', META_TYPE 'mssql', META_AZURE_SECRET 'azure_sp');
 ```
 
-`META_AZURE_SECRET` and other `META_*` options are forwarded to the inner `ATTACH ... TYPE mssql` that DuckLake uses for the catalog database.
+Grant the app registration access in the database (`CREATE USER ... FROM EXTERNAL PROVIDER`, role membership) as in the mssql extension docs.
 
 ### DuckLake `TYPE DUCKLAKE` secrets
 
-You can store connection details in a DuckLake secret and attach by name:
+Store catalog and data paths in a DuckLake secret and attach by name; reference whichever Azure secret you created (`azure_cli`, `azure_sp`, or another provider):
 
 ```sql
 CREATE SECRET my_lake (
@@ -82,12 +94,20 @@ CREATE SECRET my_lake (
     METADATA_PATH 'mssql:Server=myserver.database.windows.net,1433;Database=my_catalog;Encrypt=true',
     DATA_PATH 'az://my-data-path/',
     METADATA_PARAMETERS MAP {
-        'AZURE_SECRET': 'azure_sp'
+        'AZURE_SECRET': 'azure_cli'
     }
 );
 
 ATTACH 'ducklake:my_lake' AS my_lake;
 ```
+
+### SQL authentication (on-premises SQL Server only)
+
+For **self-hosted** SQL Server or a **local Docker** dev container, you can use SQL authentication (`User Id` / `Password`) in the `mssql:` connection string. Do **not** use this pattern for Azure SQL or Fabric; use Entra ID and `AZURE_SECRET` or `ACCESS_TOKEN` as described in [AZURE.md](https://github.com/hugr-lab/mssql-extension/blob/main/AZURE.md).
+
+### Automated tests in this repository
+
+This repo’s CI job runs a **SQL Server 2022 Docker** container with SQL authentication so tests can run without Azure credentials. That setup is **not** representative of Azure SQL or Fabric production auth.
 
 ## Usage
 
